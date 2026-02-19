@@ -4,30 +4,35 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-# -----------------------------------------
-# Page Setup
-# -----------------------------------------
 st.set_page_config(page_title="Predictive Order Risk Brain")
 st.title("📦 Predictive Order Risk Brain")
 st.markdown("AI-powered Delivery Risk Prediction")
 
 # -----------------------------------------
-# Train Model Function
+# Train Model
 # -----------------------------------------
 @st.cache_resource
 def train_model():
 
-    # Load dataset
     df = pd.read_csv("fixed_dataset.csv")
-
-    # Clean column names
     df.columns = df.columns.str.strip()
 
-    # Rename if spaces exist
+    # Rename safe
     df = df.rename(columns={
         "Order Value": "Order_Value",
         "Plant_Load %": "Plant_Load_%"
     })
+
+    # -----------------------------
+    # 🔥 FIXED BUSINESS LABEL LOGIC
+    # -----------------------------
+    df["Delayed"] = np.where(
+        (df["PR_Delay_Days"] > 15) |
+        (df["Plant_Load_%"] > 110) |
+        ((df["Not_Shipped_Flag"] == 1) & (df["Days_Left"] < 0)),
+        1,
+        0
+    )
 
     features = [
         "Quantity",
@@ -40,23 +45,16 @@ def train_model():
         "Not_Shipped_Flag"
     ]
 
-    # Ensure required columns exist
-    for col in features + ["Delayed"]:
-        if col not in df.columns:
-            st.error(f"Missing column in dataset: {col}")
-            st.stop()
-
     X = df[features]
     y = df["Delayed"]
 
-    # Train-test split for better generalization
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     model = RandomForestClassifier(
         n_estimators=300,
-        max_depth=10,
+        max_depth=12,
         min_samples_split=5,
         class_weight="balanced",
         random_state=42
@@ -67,7 +65,6 @@ def train_model():
     return model
 
 
-# Train once
 model = train_model()
 
 st.divider()
@@ -91,14 +88,14 @@ not_shipped = st.selectbox("Not Shipped?", [0, 1])
 def classify_risk(prob):
     if prob < 0.3:
         return "🟢 Green (Low Risk)"
-    elif prob < 0.8:
+    elif prob < 0.7:
         return "🟡 Yellow (Medium Risk)"
     else:
         return "🔴 Red (High Risk)"
 
 
 # -----------------------------------------
-# Prediction Section
+# Prediction
 # -----------------------------------------
 if st.button("Predict Risk"):
 
@@ -113,7 +110,6 @@ if st.button("Predict Risk"):
         "Not_Shipped_Flag": not_shipped
     }])
 
-    # Safe probability extraction
     proba = model.predict_proba(new_order)[0]
 
     if 1 in model.classes_:
@@ -122,7 +118,6 @@ if st.button("Predict Risk"):
     else:
         prob = 0.0
 
-    # Prevent extreme stuck values
     prob = float(np.clip(prob, 0.01, 0.99))
 
     risk = classify_risk(prob)
@@ -135,7 +130,7 @@ if st.button("Predict Risk"):
     st.divider()
     st.subheader("Recommended Action")
 
-    if prob > 0.8:
+    if prob > 0.7:
         st.error("Immediate intervention required: Approve PR and reduce plant load.")
     elif prob > 0.4:
         st.warning("Monitor closely: Review PR status and plant capacity.")
@@ -143,5 +138,5 @@ if st.button("Predict Risk"):
         st.info("Low risk: No immediate action required.")
 
 st.divider()
-st.caption("AI Signal Layer • Random Forest • Stable Production Version")
+st.caption("AI Signal Layer • Business-Aligned ML Version")
 
