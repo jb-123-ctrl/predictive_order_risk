@@ -6,17 +6,18 @@ from sklearn.ensemble import RandomForestClassifier
 st.set_page_config(page_title="Predictive Order Risk Brain")
 
 st.title("📦 Predictive Order Risk Brain")
+st.markdown("AI-powered Delivery Risk Prediction")
 
-# -----------------------------------
-# Train Model Function
-# -----------------------------------
+# -----------------------------------------
+# Train Model Safely
+# -----------------------------------------
 @st.cache_resource
 def train_model():
 
     # Load dataset
     df = pd.read_csv("fixed_dataset.csv")
 
-    # Clean column names (VERY IMPORTANT)
+    # Clean column names
     df.columns = df.columns.str.strip()
 
     # Rename columns safely if needed
@@ -25,8 +26,7 @@ def train_model():
         "Plant_Load %": "Plant_Load_%"
     })
 
-    # Required features
-    features = [
+    required_features = [
         "Quantity",
         "Ship Quantity",
         "Order_Value",
@@ -37,16 +37,15 @@ def train_model():
         "Not_Shipped_Flag"
     ]
 
-    # Ensure all required columns exist
-    for col in features + ["Delayed"]:
+    # Check required columns exist
+    for col in required_features + ["Delayed"]:
         if col not in df.columns:
             st.error(f"Missing column in dataset: {col}")
             st.stop()
 
-    X = df[features]
+    X = df[required_features]
     y = df["Delayed"]
 
-    # Train model
     model = RandomForestClassifier(
         n_estimators=200,
         class_weight="balanced",
@@ -54,18 +53,19 @@ def train_model():
     )
 
     model.fit(X, y)
+
     return model
 
 
-# Train once and cache
+# Train model once
 model = train_model()
 
 st.divider()
 st.subheader("Enter Order Details")
 
-# -----------------------------------
-# User Input Section
-# -----------------------------------
+# -----------------------------------------
+# User Inputs
+# -----------------------------------------
 quantity = st.number_input("Quantity", min_value=0, value=1000)
 ship_quantity = st.number_input("Ship Quantity", min_value=0, value=0)
 order_value = st.number_input("Order Value", min_value=0.0, value=10000.0)
@@ -75,9 +75,9 @@ pr_delay = st.number_input("PR Delay Days", min_value=0, value=5)
 plant_load = st.number_input("Plant Load (%)", min_value=0.0, value=90.0)
 not_shipped = st.selectbox("Not Shipped?", [0, 1])
 
-# -----------------------------------
-# Risk Classification
-# -----------------------------------
+# -----------------------------------------
+# Risk Classification Logic
+# -----------------------------------------
 def classify_risk(prob):
     if prob < 0.3:
         return "🟢 Green (Low Risk)"
@@ -87,9 +87,9 @@ def classify_risk(prob):
         return "🔴 Red (High Risk)"
 
 
-# -----------------------------------
-# Prediction Button
-# -----------------------------------
+# -----------------------------------------
+# Prediction
+# -----------------------------------------
 if st.button("Predict Risk"):
 
     new_order = pd.DataFrame([{
@@ -103,7 +103,15 @@ if st.button("Predict Risk"):
         "Not_Shipped_Flag": not_shipped
     }])
 
-    prob = model.predict_proba(new_order)[0][1]
+    # Safe probability extraction
+    proba = model.predict_proba(new_order)[0]
+
+    if 1 in model.classes_:
+        class_index = list(model.classes_).index(1)
+        prob = proba[class_index]
+    else:
+        prob = 0.0
+
     risk = classify_risk(prob)
 
     st.success("Prediction Complete")
@@ -111,6 +119,9 @@ if st.button("Predict Risk"):
     st.write("### 📊 Delay Probability:", round(prob, 3))
     st.write("### 🚦 Risk Level:", risk)
 
+    # -----------------------------------------
+    # Recommendation Section
+    # -----------------------------------------
     st.divider()
     st.subheader("Recommended Action")
 
@@ -122,4 +133,4 @@ if st.button("Predict Risk"):
         st.info("Low risk: No immediate action required.")
 
 st.divider()
-st.caption("AI Signal Layer • Random Forest • POC Deployment")
+st.caption("AI Signal Layer • Random Forest • Production Safe Version")
